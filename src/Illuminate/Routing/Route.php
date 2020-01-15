@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
 use LogicException;
 use ReflectionFunction;
+use Symfony\Component\Routing\Route as SymfonyRoute;
 
 class Route
 {
@@ -308,9 +309,19 @@ class Route
     protected function compileRoute()
     {
         if (! $this->compiled) {
-            $this->compiled = (new RouteCompiler($this))->compile();
+            $this->compiled = $this->toSymfonyRoute()->compile();
         }
 
+        return $this->compiled;
+    }
+
+    /**
+     * Get the compiled version of the route.
+     *
+     * @return \Symfony\Component\Routing\CompiledRoute
+     */
+    public function getCompiled()
+    {
         return $this->compiled;
     }
 
@@ -911,13 +922,29 @@ class Route
     }
 
     /**
-     * Get the compiled version of the route.
+     * Convert the route to a Symfony route.
      *
-     * @return \Symfony\Component\Routing\CompiledRoute
+     * @return \Symfony\Component\Routing\Route
      */
-    public function getCompiled()
+    public function toSymfonyRoute()
     {
-        return $this->compiled;
+        $optionals = $this->getOptionalParameters();
+
+        $uri = preg_replace('/\{(\w+?)\?\}/', '{$1}', $this->uri());
+
+        return new SymfonyRoute($uri, $optionals, $this->wheres, ['utf8' => true], $this->getDomain() ?: '');
+    }
+
+    /**
+     * Get the optional parameters for the route.
+     *
+     * @return array
+     */
+    protected function getOptionalParameters()
+    {
+        preg_match_all('/\{(\w+?)\?\}/', $this->uri(), $matches);
+
+        return isset($matches[1]) ? array_fill_keys($matches[1], null) : [];
     }
 
     /**

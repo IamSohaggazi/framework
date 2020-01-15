@@ -5,7 +5,9 @@ namespace Illuminate\Foundation\Console;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernelContract;
 use Illuminate\Filesystem\Filesystem;
-use Illuminate\Routing\RouteCollection;
+use Illuminate\Support\Str;
+use Symfony\Component\Routing\Matcher\Dumper\CompiledUrlMatcherDumper;
+use Symfony\Component\Routing\RouteCollection as SymfonyRouteCollection;
 
 class RouteCacheCommand extends Command
 {
@@ -58,12 +60,14 @@ class RouteCacheCommand extends Command
             return $this->error("Your application doesn't have any routes.");
         }
 
+        $symfonyRoutes = new SymfonyRouteCollection();
+
         foreach ($routes as $route) {
-            $route->prepareForSerialization();
+            $symfonyRoutes->add($route->getName() ?? Str::random(), $route->toSymfonyRoute());
         }
 
         $this->files->put(
-            $this->laravel->getCachedRoutesPath(), $this->buildRouteCacheFile($routes)
+            $this->laravel->getCachedRoutesPath(), $this->buildRouteCacheFile($symfonyRoutes)
         );
 
         $this->info('Routes cached successfully!');
@@ -72,7 +76,7 @@ class RouteCacheCommand extends Command
     /**
      * Boot a fresh copy of the application and get the routes.
      *
-     * @return \Illuminate\Routing\RouteCollection
+     * @return \Illuminate\Routing\RouteCollection|\Illuminate\Routing\Route[]
      */
     protected function getFreshApplicationRoutes()
     {
@@ -97,13 +101,15 @@ class RouteCacheCommand extends Command
     /**
      * Build the route cache file.
      *
-     * @param  \Illuminate\Routing\RouteCollection  $routes
+     * @param  \Symfony\Component\Routing\RouteCollection  $routes
      * @return string
      */
-    protected function buildRouteCacheFile(RouteCollection $routes)
+    protected function buildRouteCacheFile(SymfonyRouteCollection $routes)
     {
+        $compiledRoutes = (new CompiledUrlMatcherDumper($routes))->getCompiledRoutes();
+
         $stub = $this->files->get(__DIR__.'/stubs/routes.stub');
 
-        return str_replace('{{routes}}', base64_encode(serialize($routes)), $stub);
+        return str_replace('{{routes}}', base64_encode(serialize($compiledRoutes)), $stub);
     }
 }
